@@ -4,18 +4,22 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.Method;
 import java.time.LocalDateTime;
 
 import javax.inject.Inject;
-import javax.transaction.Transactional;
 import javax.ws.rs.container.ContainerRequestContext;
 import javax.ws.rs.container.ContainerRequestFilter;
 import javax.ws.rs.container.ContainerResponseContext;
 import javax.ws.rs.container.ContainerResponseFilter;
+import javax.ws.rs.container.ResourceInfo;
+import javax.ws.rs.core.Context;
+import javax.ws.rs.core.MediaType;
 import javax.ws.rs.ext.Provider;
 
+import org.acme.domain.uc.GravaLogOperacaoUC;
 import org.acme.infra.entity.LogAuditoria;
-import org.acme.infra.repository.LogAuditoriaRepository;
+import org.acme.share.annotations.LogOperacao;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -27,15 +31,17 @@ public class AuditoriaFilter implements ContainerRequestFilter, ContainerRespons
     private ObjectMapper mapper = new ObjectMapper();
 
     @Inject
-    LogAuditoriaRepository logAuditoriaRepository;
+    GravaLogOperacaoUC gravaLogOperacaoUC;
+
+    @Context
+    ResourceInfo resourceInfo;    
 
     @Override
-    @Transactional
     public void filter(ContainerRequestContext requestContext) throws IOException {
 
         String pathRequest = requestContext.getUriInfo().getPath();
 
-        ServicoEnum servicoEnum = ServicoEnum.getByUrl(pathRequest);
+        LogOperacao logOperacao = this.getLogOperacao(this.resourceInfo.getResourceMethod());
 
         //buscando body do request
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -50,23 +56,47 @@ public class AuditoriaFilter implements ContainerRequestFilter, ContainerRespons
         LogAuditoria logRequest = new LogAuditoria();
         logRequest.data      = LocalDateTime.now();
         logRequest.conteudo = bodyRequest;
-        logRequest.operacao = servicoEnum.getCode();
-        logRequest.servico  = servicoEnum.getValue();
+        logRequest.operacao = logOperacao.operacao().getCode();
+        logRequest.servico  = logOperacao.operacao().getValue();
         logRequest.url      = pathRequest;
 
-        logAuditoriaRepository.salvar(logRequest);
+        this.gravaLogOperacaoUC.execute(logRequest);
 
         requestContext.setProperty(LOG_AUDITORIA_REQUEST_PROPRETY, logRequest);
     }
 
     @Override
-    @Transactional
     public void filter(ContainerRequestContext requestContext, ContainerResponseContext responseContext)
             throws IOException {
 
         LogAuditoria logAuditoriaRequest = (LogAuditoria) requestContext.getProperty(LOG_AUDITORIA_REQUEST_PROPRETY);
-        System.out.println("ID: "+logAuditoriaRequest.id);
 
+        LogAuditoria logAuditoriaResponse = new LogAuditoria();
+        logAuditoriaResponse.pai      = logAuditoriaRequest;
+        logAuditoriaResponse.data     = LocalDateTime.now();
+        logAuditoriaResponse.operacao = logAuditoriaRequest.operacao;
+        logAuditoriaResponse.servico  = logAuditoriaRequest.servico;
+
+        if(responseContext.getMediaType() != null){
+            if(responseContext.getMediaType() == MediaType.APPLICATION_JSON_TYPE){
+                logAuditoriaResponse.conteudo = mapper.writeValueAsString(responseContext.getEntity());
+            }else{
+                logAuditoriaResponse.conteudo = responseContext.getEntity().toString();
+            }
+        }
+        
+        this.gravaLogOperacaoUC.execute(logAuditoriaResponse);        
+
+    }
+
+    LogOperacao getLogOperacao(Method m){
+        LogOperacao[] logs = m.getAnnotationsByType(LogOperacao.class);
+
+        if(logs != null){
+            return logs[0];
+        }
+
+        return null;
     }
     
 }

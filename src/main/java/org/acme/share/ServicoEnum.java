@@ -2,18 +2,17 @@ package org.acme.share;
 
 public enum ServicoEnum {
 
-    BUSCA_CONTRATOS(1, "busca-contratos-service","/contratos"),
-    DETALHA_CONTRATO(2, "detalha-contrato-service","/contratos"),
-    SALVA(3, "salvar-service","/contratos");
+    NOT_FOUND(1, "not found"),
+    BUSCA_CONTRATOS(2, "busca-contratos-service"),
+    DETALHA_CONTRATO(3, "detalha-contrato-service"),
+    SALVA(4, "salvar-service");
 
     private Integer code;
     private String value;
-    private String url;
 
-    ServicoEnum(Integer code, String value, String url){
+    ServicoEnum(Integer code, String value){
         this.code  = code;
         this.value = value;
-        this.url   = url;
     }
 
     public Integer getCode() {
@@ -22,20 +21,6 @@ public enum ServicoEnum {
 
     public String getValue() {
         return value;
-    }
-
-    public String getUrl() {
-        return url;
-    }
-
-    public static ServicoEnum getByUrl(String url){
-        for (ServicoEnum s : ServicoEnum.values()) { 
-            if(s.getUrl().equals(url)){
-                return s;
-            }
-        }
-
-        return null;
     }
     
 }
